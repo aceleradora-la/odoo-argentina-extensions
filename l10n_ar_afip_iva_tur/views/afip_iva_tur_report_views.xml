@@ -44,7 +44,7 @@
                             <group groups="base.group_multi_company">
                                 <field name="invoice_ids" mode="tree"
                                        context="{'default_company_id': company_id}"
-                                       domain="[('move_type', '=', 'out_invoice'), ('state', '=', 'posted'), ('l10n_latam_document_type_id.l10n_ar_letter', '=', 'T')]">
+                                       domain="[('move_type', 'in', ('out_invoice', 'out_refund')), ('state', '=', 'posted'), ('l10n_latam_document_type_id.l10n_ar_letter', '=', 'T')]">
                                     <tree string="Comprobantes" editable="bottom">
                                         <field name="name" string="Número"/>
                                         <field name="invoice_date"/>
