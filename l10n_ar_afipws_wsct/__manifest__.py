@@ -18,5 +18,6 @@
         "views/account_move_views.xml",
         "views/res_partner_view.xml",
     ],
+    "images": ["static/description/icon.png"],
 }
 
