@@ -217,18 +217,20 @@ class AfipIvaTurReport(models.Model):
             raise UserError(_("No hay comprobantes asociados a este reporte para generar el archivo."))
         
         output = io.StringIO()
-        
+
         # --- REGISTRO TIPO 1: CABECERA DEL ARCHIVO ---
         cuit_informante = self.company_id.vat.replace('-', '').strip()
-        fecha_generacion = datetime.date.today().strftime('%Y%m')
+        # PERÍODO: mes/año que se está declarando (no la fecha de generación del archivo)
+        periodo = self.date_from.strftime('%Y%m')
         sin_movimiento = "0" if len(self.invoice_ids) > 0 else "1"
-        remesa = str(self.sequence).zfill(4)
-        
+        # SECUENCIA (rectificativa): 2 posiciones, 00 = original, >00 = rectificativas sucesivas
+        secuencia = str(self.sequence % 100).zfill(2)
+
         line1 = (
             "01" +
             cuit_informante +
-            fecha_generacion +
-            remesa +
+            periodo +
+            secuencia +
             "0103" +
             "858" +
             "8089" +
@@ -262,9 +264,11 @@ class AfipIvaTurReport(models.Model):
             # Despues del PES revisar que la cotizacion sean 18 caracteres, 6 decimales
             cotizacion_moneda = format_fixed_decimal(comprobante.cotizacionMoneda)
             
-            tipo_auth = response.tipo_autorizacion
-            codigo_auth = response.codigo_autorizacion     
-            
+            # Alfanumérico (3) / Numérico (14): deben mantener ancho fijo aun si vienen vacíos
+            # (comprobante emitido por Controlador Fiscal en vez de CAE/CAI)
+            tipo_auth = (response.tipo_autorizacion or '').ljust(3)
+            codigo_auth = (response.codigo_autorizacion or '').zfill(14)
+
             codigo_control_fiscal = "".ljust(6)
             serie_control_fiscal = "".zfill(10)
 
@@ -296,7 +300,9 @@ class AfipIvaTurReport(models.Model):
             # --- REGISTRO TIPO 3: TOTALES DEL COMPROBANTE DE VENTA (Base IVA) ---
             for iva in comprobante.subtotales_iva:
                 codigo_iva = "11" if iva.codigo == "5" else "10"
-                base_imponible = "".zfill(15)                
+                # Base imponible = Importe IVA / alícuota (21% en ambos códigos 10 y 11,
+                # la diferencia entre ellos es si aplica o no el reintegro)
+                base_imponible = str(int(round(iva.importe * 100 / 0.21))).zfill(15)
                 importe_iva = str(int(round(iva.importe * 100))).zfill(15)
                 
                 line3 = (
@@ -321,21 +327,25 @@ class AfipIvaTurReport(models.Model):
             )
             output.write(line4 + '\r\n')
 
-            # --- REGISTRO TIPO 5: IMPUESTOS Y PERCEPCIONES DEL COMPROBANTE ---
-            line5 = (
-                "05" +
-                cuit_informante +
-                tipo_comprobante_afip +
-                punto_venta +
-                numero_comprobante +
-                tipo_auth +
-                codigo_auth +
-                fecha_emision +
-                codigo_control_fiscal +
-                serie_control_fiscal +
-                importe_reintegro
-            )
-            output.write(line5 + '\r\n')
+            # --- REGISTRO TIPO 5: DATOS DEL REINTEGRO ---
+            # Sólo corresponde informarlo cuando la Relación Emisor-Receptor es 04, 05 ó 06
+            # (agencia intermediaria). Si es 01, 02 ó 03 (alojamiento directo al turista) el
+            # manual indica explícitamente que NO debe informarse este registro.
+            if codigo_relacion in ('04', '05', '06'):
+                line5 = (
+                    "05" +
+                    cuit_informante +
+                    tipo_comprobante_afip +
+                    punto_venta +
+                    numero_comprobante +
+                    tipo_auth +
+                    codigo_auth +
+                    fecha_emision +
+                    codigo_control_fiscal +
+                    serie_control_fiscal +
+                    importe_reintegro
+                )
+                output.write(line5 + '\r\n')
             
             # --- REGISTRO TIPO 6: COMPROBANTES ASOCIADOS ---
             for comp_asociado in comprobante.comprobantes_asociados:
@@ -352,6 +362,13 @@ class AfipIvaTurReport(models.Model):
                 output.write(line6 + '\r\n')
 
             # --- REGISTRO TIPO 7: CONCEPTOS DE DETALLE DEL COMPROBANTE ---
+            # TODO(IVA-TUR): CUIT del alojamiento, fecha de ingreso, unidad, tipo de unidad,
+            # cantidad de personas, cantidad de noches y precio unitario son OBLIGATORIOS por
+            # AFIP para Código TUR 0001/0002 (servicio de alojamiento), pero Odoo no captura
+            # hoy esa información en ningún lado (ni factura, ni línea, ni producto): el envío
+            # WSCT a AFIP (l10n_ar_afipws_wsct) sólo manda código/descripción/IVA/importe.
+            # Quedan en blanco/cero a propósito hasta que se agreguen esos campos (p.ej. en la
+            # línea de factura) y se complete este mapeo.
             for item in comprobante.items:
                 tipo_item = item.tipo.zfill(2)
                 cod_tur_item = item.codigoTurismo.zfill(4)
@@ -398,10 +415,12 @@ class AfipIvaTurReport(models.Model):
             numero_cuenta = "".ljust(20)
             
             if not payments:
-                # Sin pagos: tipo 1 (transferencia) con total de la factura
+                # Sin pagos: tipo 3 (transferencia bancaria) con total de la factura.
+                # Según la Tabla Tipo de Cuenta del manual: 1=Tarjeta de crédito,
+                # 2=Tarjeta de débito, 3=Transferencia bancaria.
                 line8 = (
                     "08"
-                    + "1"  # tipo_forma_pago (transferencia)
+                    + "3"  # tipo_forma_pago (transferencia bancaria)
                     + codigo_swift
                     + tipo_cuenta
                     + numero_tarjeta
@@ -412,7 +431,7 @@ class AfipIvaTurReport(models.Model):
             else:
                  # Con pagos: generar un registro por cada pago
                 for pay in payments:
-                    tipo_forma_pago = pay.journal_id.l10n_ar_afip_wsct_payment_type or '1'
+                    tipo_forma_pago = pay.journal_id.l10n_ar_afip_wsct_payment_type or '3'
                     importe_medio_pago = str(int(round(pay.amount * 100))).zfill(15)
 
                     line8 = (
@@ -433,8 +452,8 @@ class AfipIvaTurReport(models.Model):
             # Asegurar que el CUIT tiene 11 dígitos, rellenar si es necesario, o truncar
             cuit_informante_padded = cuit_informante_clean.ljust(11, '0')[:11] # Rellenar con 0 y truncar a 11
 
-            fecha_generacion_hoy = datetime.date.today()
-            periodo = fecha_generacion_hoy.strftime('%Y%m') # AAAAMM
+            # PERÍODO informado en el archivo: el mes/año del reporte, no la fecha de generación
+            periodo = record.date_from.strftime('%Y%m') # AAAAMM
 
             # Asumimos '0000' para la primera remesa.
             # Si necesitas un manejo de remesas, esto implicaría un campo en afip.iva.tur.report
