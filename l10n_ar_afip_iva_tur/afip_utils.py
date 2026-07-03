@@ -158,12 +158,16 @@ def parse_afip_response(xml_string: str) -> ComprobanteResponse:
     }
 
     root = ET.fromstring(xml_string)
+    # El elemento raíz de la respuesta ("ns2:autorizarComprobanteResponse" en la respuesta
+    # real de AFIP) usa el namespace wsct, pero sus hijos (autorizarComprobanteReturn,
+    # comprobanteResponse, resultado, etc.) NO heredan ese namespace: al no llevar el
+    # prefijo, quedan en el namespace vacío. Por eso se busca sin prefijo a partir de ahí.
     comp_resp_node = root.find(
-        ".//wsct:autorizarComprobanteResponse/wsct:autorizarComprobanteReturn/comprobanteResponse",
+        ".//wsct:autorizarComprobanteResponse/autorizarComprobanteReturn/comprobanteResponse",
         ns
     )
     resultado_node = root.find(
-        ".//wsct:autorizarComprobanteResponse/wsct:autorizarComprobanteReturn/resultado",
+        ".//wsct:autorizarComprobanteResponse/autorizarComprobanteReturn/resultado",
         ns
     )
 
