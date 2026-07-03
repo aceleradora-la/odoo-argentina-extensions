@@ -60,7 +60,7 @@ class AfipIvaTurReport(models.Model):
     invoice_ids = fields.Many2many(
         'account.move',
         string='Comprobantes Incluidos',
-        domain=[('move_type', '=', 'out_invoice'), ('state', '=', 'posted')],
+        domain=[('move_type', 'in', ('out_invoice', 'out_refund')), ('state', '=', 'posted')],
         help="Listado de comprobantes Tipo T incluidos en este reporte. Se completará automáticamente al generar el borrador."
     )
     
@@ -146,7 +146,9 @@ class AfipIvaTurReport(models.Model):
 
         domain = [
             ('company_id', '=', self.company_id.id),
-            ('move_type', '=', 'out_invoice'),
+            # out_invoice = Factura T / Nota de Débito T, out_refund = Nota de Crédito T.
+            # Filtrar sólo por out_invoice dejaba afuera todas las Notas de Crédito T (197).
+            ('move_type', 'in', ('out_invoice', 'out_refund')),
             ('state', '=', 'posted'),
             ('invoice_date', '>=', self.date_from),
             ('invoice_date', '<=', self.date_to),
