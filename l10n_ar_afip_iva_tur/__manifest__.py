@@ -17,6 +17,7 @@
     ],
     'data': [
         'security/ir.model.access.csv',
+        'security/afip_iva_tur_security.xml',
         'views/res_company_views.xml',
         'views/afip_iva_tur_report_views.xml',
         'views/account_journal_view.xml',
