@@ -257,7 +257,9 @@ class AfipIvaTurReport(models.Model):
             importe_gravado = str(int(round(comprobante.importeGravado * 100))).zfill(15)
             importe_no_gravado = str(int(round(comprobante.importeNoGravado * 100))).zfill(15)
             importe_exento = str(int(round(comprobante.importeExento * 100))).zfill(15)
-            importe_reintegro = str(int(round(comprobante.importeReintegro * 100))).zfill(15)
+            # IMPORTE REINTEGRO es un campo numérico sin signo; el XML de AFIP lo trae
+            # negativo (convención interna de WSCT), por eso se informa en valor absoluto.
+            importe_reintegro = str(abs(int(round(comprobante.importeReintegro * 100)))).zfill(15)
             importe_total = str(int(round(comprobante.importeTotal * 100))).zfill(15)
 
             codigo_moneda = comprobante.codigoMoneda.ljust(3)
@@ -272,29 +274,29 @@ class AfipIvaTurReport(models.Model):
             codigo_control_fiscal = "".ljust(6)
             serie_control_fiscal = "".zfill(10)
 
-            line2 = (
-                "02" +
-                tipo_comprobante_afip +
-                punto_venta +
-                numero_comprobante +
-                fecha_emision +
-                tipo_doc_turista +
-                nro_doc_turista +
-                codigo_pais +
-                id_impositivo +
-                codigo_relacion +
-                importe_gravado +
-                importe_no_gravado +
-                importe_exento +
-                importe_reintegro +
-                codigo_moneda +
-                cotizacion_moneda +
-                tipo_auth +
-                codigo_auth +
-                codigo_control_fiscal +
-                serie_control_fiscal +
-                importe_total
-            )
+            line2 = "".join(str(x) for x in (
+                "02",
+                tipo_comprobante_afip,
+                punto_venta,
+                numero_comprobante,
+                fecha_emision,
+                tipo_doc_turista,
+                nro_doc_turista,
+                codigo_pais,
+                id_impositivo,
+                codigo_relacion,
+                importe_gravado,
+                importe_no_gravado,
+                importe_exento,
+                importe_reintegro,
+                codigo_moneda,
+                cotizacion_moneda,
+                tipo_auth,
+                codigo_auth,
+                codigo_control_fiscal,
+                serie_control_fiscal,
+                importe_total,
+            ))
             output.write(line2 + '\r\n')
 
             # --- REGISTRO TIPO 3: TOTALES DEL COMPROBANTE DE VENTA (Base IVA) ---
@@ -305,26 +307,18 @@ class AfipIvaTurReport(models.Model):
                 base_imponible = str(int(round(iva.importe * 100 / 0.21))).zfill(15)
                 importe_iva = str(int(round(iva.importe * 100))).zfill(15)
                 
-                line3 = (
-                    "03" +
-                    codigo_iva +
-                    base_imponible +
-                    importe_iva
-                )
+                line3 = "".join(str(x) for x in (
+                    "03", codigo_iva, base_imponible, importe_iva,
+                ))
                 output.write(line3 + '\r\n')
 
             # --- REGISTRO TIPO 4: DATOS DEL TURISTA EXTRANJERO ---
             nombre_turista = str(inv.partner_id.name or '').strip().ljust(50)
             
-            line4 = (
-                "04" +
-                tipo_doc_turista +
-                nro_doc_turista +
-                codigo_pais +
-                nombre_turista +
-                codigo_pais +
-                codigo_pais
-            )
+            line4 = "".join(str(x) for x in (
+                "04", tipo_doc_turista, nro_doc_turista, codigo_pais,
+                nombre_turista, codigo_pais, codigo_pais,
+            ))
             output.write(line4 + '\r\n')
 
             # --- REGISTRO TIPO 5: DATOS DEL REINTEGRO ---
@@ -332,19 +326,11 @@ class AfipIvaTurReport(models.Model):
             # (agencia intermediaria). Si es 01, 02 ó 03 (alojamiento directo al turista) el
             # manual indica explícitamente que NO debe informarse este registro.
             if codigo_relacion in ('04', '05', '06'):
-                line5 = (
-                    "05" +
-                    cuit_informante +
-                    tipo_comprobante_afip +
-                    punto_venta +
-                    numero_comprobante +
-                    tipo_auth +
-                    codigo_auth +
-                    fecha_emision +
-                    codigo_control_fiscal +
-                    serie_control_fiscal +
-                    importe_reintegro
-                )
+                line5 = "".join(str(x) for x in (
+                    "05", cuit_informante, tipo_comprobante_afip, punto_venta,
+                    numero_comprobante, tipo_auth, codigo_auth, fecha_emision,
+                    codigo_control_fiscal, serie_control_fiscal, importe_reintegro,
+                ))
                 output.write(line5 + '\r\n')
             
             # --- REGISTRO TIPO 6: COMPROBANTES ASOCIADOS ---
@@ -353,12 +339,9 @@ class AfipIvaTurReport(models.Model):
                 punto_venta_comp_asociado = comp_asociado.numeroPuntoVenta.zfill(5)
                 numero_comp_asociado = comp_asociado.numeroComprobante.zfill(8)
                 
-                line6 = (
-                    "06" +
-                    codigo_comp_asociado +
-                    punto_venta_comp_asociado +
-                    numero_comp_asociado
-                )
+                line6 = "".join(str(x) for x in (
+                    "06", codigo_comp_asociado, punto_venta_comp_asociado, numero_comp_asociado,
+                ))
                 output.write(line6 + '\r\n')
 
             # --- REGISTRO TIPO 7: CONCEPTOS DE DETALLE DEL COMPROBANTE ---
@@ -385,23 +368,12 @@ class AfipIvaTurReport(models.Model):
                 importe_iva_item = str(int(round(item.importeIVA * 100))).zfill(15)
                 importe_total_item = str(int(round(item.importeItem * 100))).zfill(15)
                 
-                line7 = (
-                    "07" +
-                    tipo_item +
-                    cod_tur_item +
-                    codigo_item +
-                    cuit_hotel +
-                    fecha_ingreso_item +
-                    unidad_item +
-                    tipo_unidad_item +
-                    cantidad_personas +
-                    descripcion_item +
-                    cantidad_noches +
-                    precio_unitario +
-                    codigo_iva_item +
-                    importe_iva_item +
-                    importe_total_item
-                )
+                line7 = "".join(str(x) for x in (
+                    "07", tipo_item, cod_tur_item, codigo_item, cuit_hotel,
+                    fecha_ingreso_item, unidad_item, tipo_unidad_item, cantidad_personas,
+                    descripcion_item, cantidad_noches, precio_unitario, codigo_iva_item,
+                    importe_iva_item, importe_total_item,
+                ))
                 output.write(line7 + '\r\n')
 
             # --- REGISTRO TIPO 8: MEDIOS DE PAGO ---
@@ -418,15 +390,15 @@ class AfipIvaTurReport(models.Model):
                 # Sin pagos: tipo 3 (transferencia bancaria) con total de la factura.
                 # Según la Tabla Tipo de Cuenta del manual: 1=Tarjeta de crédito,
                 # 2=Tarjeta de débito, 3=Transferencia bancaria.
-                line8 = (
-                    "08"
-                    + "3"  # tipo_forma_pago (transferencia bancaria)
-                    + codigo_swift
-                    + tipo_cuenta
-                    + numero_tarjeta
-                    + numero_cuenta
-                    + str(int(round(inv.amount_total * 100))).zfill(15)
-                )
+                line8 = "".join(str(x) for x in (
+                    "08",
+                    "3",  # tipo_forma_pago (transferencia bancaria)
+                    codigo_swift,
+                    tipo_cuenta,
+                    numero_tarjeta,
+                    numero_cuenta,
+                    str(int(round(inv.amount_total * 100))).zfill(15),
+                ))
                 output.write(line8 + '\r\n')
             else:
                  # Con pagos: generar un registro por cada pago
@@ -434,15 +406,10 @@ class AfipIvaTurReport(models.Model):
                     tipo_forma_pago = pay.journal_id.l10n_ar_afip_wsct_payment_type or '3'
                     importe_medio_pago = str(int(round(pay.amount * 100))).zfill(15)
 
-                    line8 = (
-                        "08"
-                        + tipo_forma_pago
-                        + codigo_swift
-                        + tipo_cuenta
-                        + numero_tarjeta
-                        + numero_cuenta
-                        + importe_medio_pago
-                    )
+                    line8 = "".join(str(x) for x in (
+                        "08", tipo_forma_pago, codigo_swift, tipo_cuenta,
+                        numero_tarjeta, numero_cuenta, importe_medio_pago,
+                    ))
                     output.write(line8 + '\r\n')
         
         content = output.getvalue()
