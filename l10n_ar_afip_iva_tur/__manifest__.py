@@ -1,7 +1,7 @@
 # l10n_ar_afip_iva_tur/__manifest__.py
 {
     'name': 'Argentina - AFIP IVA Turismo Exportable',
-    'version': '17.0.1.0.0',
+    'version': '18.0.1.0.0',
     'category': 'Localization/Accounting',
     'summary': 'Generación del exportable para el Régimen de Alojamiento de Turistas Extranjeros (IVA Turismo) de AFIP.',
     'author': 'aceleradora.la',
