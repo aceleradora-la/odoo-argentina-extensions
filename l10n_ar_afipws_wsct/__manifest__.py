@@ -1,6 +1,6 @@
 {
     "name": "Argentina - Factura de Turismo WSCT (Community)",
-    "version": "18.0.1.0.0",
+    "version": "19.0.1.0.0",
     "category": "Localization/Argentina",
     "summary": "Solicitud de CAE para comprobantes de turismo (RG3971 - WSCT) sobre el stack AFIP de ADHOC",
     "description": """

@@ -1,6 +1,6 @@
 {
     "name": "Argentina - AFIP IVA Turismo Exportable",
-    "version": "18.0.1.0.0",
+    "version": "19.0.1.0.0",
     "category": "Localization/Argentina",
     "summary": "Generación del exportable para el Régimen de Alojamiento de Turistas Extranjeros (IVA Turismo).",
     "description": """

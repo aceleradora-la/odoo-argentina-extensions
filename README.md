@@ -30,7 +30,7 @@ cada uno implementa.
 Requiere el stack AFIP de ADHOC y `pyafipws`:
 
 ```
-git clone -b 18.0 https://github.com/ingadhoc/odoo-argentina-ce
+git clone -b 19.0 https://github.com/ingadhoc/odoo-argentina-ce
 pip install pyafipws
 ```
 

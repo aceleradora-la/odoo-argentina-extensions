@@ -1,6 +1,6 @@
 {
     "name": "Argentina - Factura de Turismo (base)",
-    "version": "18.0.1.0.0",
+    "version": "19.0.1.0.0",
     "category": "Localization/Argentina",
     "summary": "Modelo de datos comun para la Factura de Turismo (RG3971 / WSCT)",
     "description": """
