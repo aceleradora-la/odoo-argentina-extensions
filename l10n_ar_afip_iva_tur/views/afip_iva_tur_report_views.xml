@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+
     <record id="afip_iva_tur_report_form_view" model="ir.ui.view">
         <field name="name">afip.iva.tur.report.form</field>
         <field name="model">afip.iva.tur.report</field>
@@ -7,110 +8,130 @@
             <form string="Reporte AFIP IVA Turismo">
                 <header>
                     <button name="action_update_invoices" string="Actualizar Comprobantes" type="object"
-                            invisible="state in ['generated', 'presented']"
+                            invisible="state == 'presented'"
                             class="oe_highlight"/>
                     <button name="action_generate_file" string="Generar Archivo TXT" type="object"
                             invisible="state != 'generated'"
                             class="oe_highlight"/>
                     <button name="action_mark_as_presented" string="Marcar como Presentado" type="object"
-                            invisible="state != 'generated'"
-                            class="oe_highlight"/>
+                            invisible="state != 'generated' or not exported_file"/>
                     <button name="action_set_to_draft" string="Volver a Borrador" type="object"
-                            invisible="state == 'draft'"/>
+                            invisible="state != 'generated'"/>
                     <button name="action_clear_invoices" string="Limpiar Comprobantes" type="object"
-                            invisible="state != 'draft'"
+                            invisible="state != 'draft' or invoice_count == 0"
                             confirm="¿Está seguro de que desea eliminar todos los comprobantes de este borrador?"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,generated,presented"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
-                        <h1><field name="name"/></h1>
+                        <h1><field name="name" readonly="1"/></h1>
                     </div>
                     <group>
                         <group>
-                            <field name="company_id" groups="base.group_multi_company"/>
-                            <field name="date_from"/>
-                            <field name="date_to"/>
+                            <field name="company_id" groups="base.group_multi_company"
+                                   readonly="state != 'draft'"/>
+                            <field name="date_from" readonly="state != 'draft'"/>
+                            <field name="date_to" readonly="state != 'draft'"/>
                             <field name="date_payment"/>
                         </group>
                         <group>
+                            <field name="invoice_count"/>
+                            <field name="sequence"/>
                             <field name="presentation_date" invisible="state != 'presented'"/>
-                            <field name="exported_file" filename="exported_filename" invisible="exported_file == False"/>
+                            <field name="exported_file" filename="exported_filename"
+                                   invisible="not exported_file"/>
                             <field name="exported_filename" invisible="1"/>
                         </group>
                     </group>
                     <notebook>
-                        <page string="Comprobantes Incluidos">
-                            <group groups="base.group_multi_company">
-                                <field name="invoice_ids" mode="tree"
-                                       context="{'default_company_id': company_id}"
-                                       domain="[('move_type', '=', 'out_invoice'), ('state', '=', 'posted'), ('l10n_latam_document_type_id.l10n_ar_letter', '=', 'T')]">
-                                    <tree string="Comprobantes" editable="bottom">
-                                        <field name="name" string="Número"/>
-                                        <field name="invoice_date"/>
-                                        <field name="partner_id"/>
-                                        <field name="amount_total"/>
-                                        <field name="company_id" invisible="1"/>
-                                    </tree>
-                                </field>
-                            </group>
+                        <!-- La versión anterior envolvía esta página en un
+                             groups="base.group_multi_company", con lo cual la lista de
+                             comprobantes quedaba invisible en cualquier base de una sola compañía. -->
+                        <page string="Comprobantes Incluidos" name="invoices">
+                            <field name="invoice_ids" readonly="1">
+                                <list string="Comprobantes">
+                                    <field name="name" string="Número"/>
+                                    <field name="invoice_date"/>
+                                    <field name="partner_id"/>
+                                    <field name="l10n_latam_document_type_id"/>
+                                    <field name="amount_total"/>
+                                    <field name="currency_id" column_invisible="1"/>
+                                    <field name="company_id" column_invisible="1"/>
+                                </list>
+                            </field>
                         </page>
                     </notebook>
                 </sheet>
-                <div class="oe_chatter">
-                    <field name="message_follower_ids" widget="mail_followers"/>
-                    <field name="activity_ids" widget="mail_activity"/>
-                    <field name="message_ids" widget="mail_thread"/>
-                </div>
+                <chatter/>
             </form>
         </field>
     </record>
 
-    <record id="afip_iva_tur_report_tree_view" model="ir.ui.view">
-        <field name="name">afip.iva.tur.report.tree</field>
+    <record id="afip_iva_tur_report_list_view" model="ir.ui.view">
+        <field name="name">afip.iva.tur.report.list</field>
         <field name="model">afip.iva.tur.report</field>
         <field name="arch" type="xml">
-            <tree string="Reportes AFIP IVA Turismo">
+            <list string="Reportes AFIP IVA Turismo">
                 <field name="name"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="date_from"/>
                 <field name="date_to"/>
-                <field name="state"/>
+                <field name="invoice_count"/>
                 <field name="presentation_date"/>
-            </tree>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state == 'generated'"
+                       decoration-success="state == 'presented'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="afip_iva_tur_report_search_view" model="ir.ui.view">
+        <field name="name">afip.iva.tur.report.search</field>
+        <field name="model">afip.iva.tur.report</field>
+        <field name="arch" type="xml">
+            <search string="Reportes AFIP IVA Turismo">
+                <field name="name"/>
+                <filter name="filter_draft" string="Borrador" domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_generated" string="Generado" domain="[('state', '=', 'generated')]"/>
+                <filter name="filter_presented" string="Presentado" domain="[('state', '=', 'presented')]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="group_state" string="Estado" context="{'group_by': 'state'}"/>
+                    <filter name="group_date_from" string="Período" context="{'group_by': 'date_from'}"/>
+                </group>
+            </search>
         </field>
     </record>
 
     <record id="action_afip_iva_tur_report" model="ir.actions.act_window">
-        <field name="name">Informes IVA Tur</field>
+        <field name="name">Informes IVA Turismo</field>
         <field name="res_model">afip.iva.tur.report</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="afip_iva_tur_report_search_view"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Cree su primer informe de IVA Turismo.
             </p><p>
-                Los informes de IVA Turismo le permiten generar el archivo de presentación mensual para AFIP.
+                Los informes de IVA Turismo le permiten generar el archivo de presentación mensual para AFIP/ARCA.
             </p>
         </field>
-        <field name="context">{'form_view_ref': 'l10n_ar_afip_iva_tur.afip_iva_tur_wizard_form_view'}</field>
-    </record>
-
-    <record id="action_afip_iva_tur_wizard_create" model="ir.actions.act_window">
-        <field name="name">Crear Informe IVA Tur</field>
-        <field name="res_model">afip.iva.tur.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
     </record>
 
     <menuitem id="menu_afip_iva_tur_root"
-              name="IVA Tur"
+              name="IVA Turismo"
               parent="account.menu_finance_reports"
               sequence="100"/>
 
     <menuitem id="menu_afip_iva_tur_report"
-              name="Informes IVA Tur"
+              name="Informes IVA Turismo"
               parent="menu_afip_iva_tur_root"
               action="action_afip_iva_tur_report"
               sequence="10"/>
+
+    <menuitem id="menu_afip_iva_tur_wizard"
+              name="Crear Informe IVA Turismo"
+              parent="menu_afip_iva_tur_root"
+              action="action_afip_iva_tur_wizard_create"
+              sequence="20"/>
 
 </odoo>

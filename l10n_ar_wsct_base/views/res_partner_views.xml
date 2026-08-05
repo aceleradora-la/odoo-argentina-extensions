@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Se ancla en l10n_ar.base_view_partner_form (Odoo estandar) y no en el grupo
+         "afip_col_2" de l10n_ar_ux: ese grupo era una dependencia no declarada y ademas
+         paso a llamarse "arca_col_2" en la version 19.0, con lo cual el xpath original
+         rompia la instalacion. -->
+    <record id="view_partner_form_wsct" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.wsct</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="l10n_ar.base_view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='l10n_ar_afip_responsibility_type_id']" position="after">
+                <field name="codigo_relacion" invisible="'AR' not in fiscal_country_codes"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

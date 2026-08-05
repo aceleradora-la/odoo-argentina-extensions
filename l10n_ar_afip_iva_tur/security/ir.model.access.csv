@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_afip_iva_tur_wizard,afip.iva.tur.wizard access,model_afip_iva_tur_wizard,,1,1,1,1
-access_afip_iva_tur_report,afip.iva.tur.report access,model_afip_iva_tur_report,,1,1,1,1
+access_afip_iva_tur_report_user,afip.iva.tur.report user,model_afip_iva_tur_report,account.group_account_invoice,1,1,1,0
+access_afip_iva_tur_report_manager,afip.iva.tur.report manager,model_afip_iva_tur_report,account.group_account_manager,1,1,1,1
+access_afip_iva_tur_wizard,afip.iva.tur.wizard,model_afip_iva_tur_wizard,account.group_account_invoice,1,1,1,1

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="afip_iva_tur_wizard_form_view" model="ir.ui.view">
+        <field name="name">afip.iva.tur.wizard.form</field>
+        <field name="model">afip.iva.tur.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Crear Informe IVA Turismo">
+                <group>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                    <field name="date_from"/>
+                    <field name="date_to"/>
+                </group>
+                <footer>
+                    <button name="action_create_iva_tur_report" string="Crear Informe"
+                            type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_afip_iva_tur_wizard_create" model="ir.actions.act_window">
+        <field name="name">Crear Informe IVA Turismo</field>
+        <field name="res_model">afip.iva.tur.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="afip_iva_tur_wizard_form_view"/>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

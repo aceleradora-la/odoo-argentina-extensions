@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- Sin esta regla, en una base multi-compañía cualquier usuario veía los
+         reportes (y los comprobantes informados) de todas las compañías. -->
+    <record id="afip_iva_tur_report_company_rule" model="ir.rule">
+        <field name="name">AFIP IVA Turismo: multi-compañía</field>
+        <field name="model_id" ref="model_afip_iva_tur_report"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+
+</odoo>

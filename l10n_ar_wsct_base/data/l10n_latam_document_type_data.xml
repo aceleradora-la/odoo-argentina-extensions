@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- Comprobantes clase T del Régimen de Alojamiento de Turistas Extranjeros (RG 3971).
+         Odoo no los trae en l10n_ar: la selección de letras incluye la "T" pero no existe
+         ningún l10n_latam.document.type que la use, con lo cual los diarios WSCT no
+         encontraban tipos de documento y el reporte de IVA Turismo nunca listaba comprobantes.
+
+         Los códigos 195 y 196 ya existen en l10n_ar con letra "I" ("Facturas y comprobantes
+         del exterior", usados para el mapeo de importaciones). Son registros distintos: el
+         modelo no tiene una restricción de unicidad sobre el código. -->
+
+    <record id="dc_t_f" model="l10n_latam.document.type">
+        <field name="sequence">1950</field>
+        <field name="code">195</field>
+        <field name="name">INVOICES T</field>
+        <field name="l10n_ar_letter">T</field>
+        <field name="report_name">INVOICE</field>
+        <field name="internal_type">invoice</field>
+        <field name="doc_code_prefix">FA-T</field>
+        <field name="country_id" ref="base.ar"/>
+        <field name="purchase_aliquots">zero</field>
+    </record>
+
+    <record id="dc_t_nd" model="l10n_latam.document.type">
+        <field name="sequence">1960</field>
+        <field name="code">196</field>
+        <field name="name">DEBIT MEMOS T</field>
+        <field name="l10n_ar_letter">T</field>
+        <field name="report_name">DEBIT NOTE</field>
+        <field name="internal_type">debit_note</field>
+        <field name="doc_code_prefix">ND-T</field>
+        <field name="country_id" ref="base.ar"/>
+        <field name="purchase_aliquots">zero</field>
+    </record>
+
+    <record id="dc_t_nc" model="l10n_latam.document.type">
+        <field name="sequence">1970</field>
+        <field name="code">197</field>
+        <field name="name">CREDIT NOTES T</field>
+        <field name="l10n_ar_letter">T</field>
+        <field name="report_name">CREDIT NOTE</field>
+        <field name="internal_type">credit_note</field>
+        <field name="doc_code_prefix">NC-T</field>
+        <field name="country_id" ref="base.ar"/>
+        <field name="purchase_aliquots">zero</field>
+    </record>
+
+</odoo>
