@@ -247,7 +247,7 @@ class AfipIvaTurReport(models.Model):
             response = parse_afip_response(inv.afip_xml_response)
                       
             # --- REGISTRO TIPO 2: COMPROBANTE DE VENTA ---
-            tipo_comprobante_afip = comprobante.codigoTipoDocumento.zfill(3)
+            tipo_comprobante_afip = comprobante.codigoTipoComprobante.zfill(3)
             punto_venta = comprobante.numeroPuntoVenta.zfill(5)
             numero_comprobante = comprobante.numeroComprobante.zfill(8)
             fecha_emision = inv.invoice_date.strftime('%Y%m%d') if inv.invoice_date else '00000000'
@@ -437,7 +437,11 @@ class AfipIvaTurReport(models.Model):
         # Revisar nombre del archivo
         filename = _get_export_filename_report(self)
 
-        encoded_content = base64.b64encode(content.encode('utf-8'))
+        # AFIP valida la longitud de cada registro en BYTES, leyendo el archivo como
+        # Latin-1 (ISO-8859-1). En UTF-8 los caracteres acentuados ocupan 2 bytes y
+        # desalinean el registro completo (p.ej. "habitación" sumaba +1 byte por tilde
+        # y el registro 07 pasaba de 342 a 344). Latin-1 garantiza 1 byte por carácter.
+        encoded_content = base64.b64encode(content.encode('latin-1', errors='replace'))
 
         self.write({
             'exported_file': encoded_content,
