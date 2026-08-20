@@ -4,11 +4,37 @@ from odoo import fields, models, api, _
 from odoo.exceptions import ValidationError, UserError
 import datetime
 import io
+import json
 import base64
 import logging
 from odoo.addons.l10n_ar_afip_iva_tur.afip_utils import parse_autorizar_comprobante, format_fixed_decimal, parse_afip_response
 
 _logger = logging.getLogger(__name__)
+
+
+def _iva_tur_parse_date(value):
+    """Devuelve un date a partir de los formatos admitidos en el JSON, o None."""
+    if isinstance(value, datetime.date):
+        return value
+    if not value:
+        return None
+    value = str(value).strip()
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y%m%d'):
+        try:
+            return datetime.datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _iva_tur_num(value):
+    """Convierte un valor del JSON a float, tolerando strings con coma decimal."""
+    if value in (None, '', False):
+        return None
+    try:
+        return float(str(value).replace(',', '.'))
+    except ValueError:
+        return None
 
 class AfipIvaTurReport(models.Model):
     _name = 'afip.iva.tur.report'
@@ -219,6 +245,9 @@ class AfipIvaTurReport(models.Model):
             raise UserError(_("No hay comprobantes asociados a este reporte para generar el archivo."))
         
         output = io.StringIO()
+        # Errores de datos de estadía (registro 07) de todo el reporte: se acumulan
+        # y se informan juntos al final, para que el usuario corrija todo de una vez.
+        stay_errors = []
 
         # --- REGISTRO TIPO 1: CABECERA DEL ARCHIVO ---
         cuit_informante = self.company_id.vat.replace('-', '').strip()
@@ -347,25 +376,91 @@ class AfipIvaTurReport(models.Model):
                 output.write(line6 + '\r\n')
 
             # --- REGISTRO TIPO 7: CONCEPTOS DE DETALLE DEL COMPROBANTE ---
-            # TODO(IVA-TUR): CUIT del alojamiento, fecha de ingreso, unidad, tipo de unidad,
-            # cantidad de personas, cantidad de noches y precio unitario son OBLIGATORIOS por
-            # AFIP para Código TUR 0001/0002 (servicio de alojamiento), pero Odoo no captura
-            # hoy esa información en ningún lado (ni factura, ni línea, ni producto): el envío
-            # WSCT a AFIP (l10n_ar_afipws_wsct) sólo manda código/descripción/IVA/importe.
-            # Quedan en blanco/cero a propósito hasta que se agreguen esos campos (p.ej. en la
-            # línea de factura) y se complete este mapeo.
-            for item in comprobante.items:
+            # Los datos de estadía (fecha de ingreso, unidad, tipo de unidad, personas,
+            # noches, precio unitario) salen del JSON cargado en cada línea de factura
+            # (campo account.move.line.l10n_ar_iva_tur_json). Las líneas de producto de
+            # la factura están en el mismo orden que los ítems del XML de WSCT, porque
+            # wsct_invoice_map_info_lines() itera el mismo filtro.
+            product_lines = inv.invoice_line_ids.filtered(
+                lambda l: l.display_type == 'product')
+            stay_list = []
+            for pline in product_lines:
+                stay = {}
+                if pline.l10n_ar_iva_tur_json:
+                    try:
+                        stay = json.loads(pline.l10n_ar_iva_tur_json)
+                        if not isinstance(stay, dict):
+                            raise ValueError()
+                    except (ValueError, TypeError):
+                        stay_errors.append(_(
+                            "%(inv)s / línea '%(line)s': el campo 'Datos IVA Tur (JSON)' no es un JSON válido.",
+                            inv=inv.name, line=(pline.name or '')[:60]))
+                        stay = {}
+                stay_list.append(stay)
+
+            for item_idx, item in enumerate(comprobante.items):
                 tipo_item = item.tipo.zfill(2)
                 cod_tur_item = item.codigoTurismo.zfill(4)
                 codigo_item = item.codigo.ljust(50)
-                cuit_hotel = "".ljust(11)
-                fecha_ingreso_item = "".ljust(8)
-                unidad_item = "".ljust(4)
-                tipo_unidad_item = "".ljust(4)
-                cantidad_personas = "".ljust(2)
+                stay = stay_list[item_idx] if item_idx < len(stay_list) else {}
+                item_ref = _("%(inv)s / ítem %(n)s (%(desc)s)",
+                             inv=inv.name, n=item_idx + 1, desc=item.descripcion[:40])
+
+                # Reglas del manual F.8089 (sección 4.7) según Tipo Ítem / Código TUR:
+                # - 91/97/99 y TUR 0020/0021: el detalle NO debe informarse.
+                # - Tipo 00 + TUR 0001/0002: el detalle es obligatorio.
+                # - TUR 0005: opcional, pero unidad/noches/precio van los tres o ninguno.
+                detail_forbidden = tipo_item in ('91', '97', '99') or cod_tur_item in ('0020', '0021')
+                detail_required = tipo_item == '00' and cod_tur_item in ('0001', '0002')
+
+                fecha_dt = _iva_tur_parse_date(stay.get('fecha_ingreso'))
+                unidad_val = _iva_tur_num(stay.get('unidad'))
+                tipo_unidad_val = str(stay.get('tipo_unidad') or '').strip()
+                personas_val = _iva_tur_num(stay.get('cantidad_personas'))
+                noches_val = _iva_tur_num(stay.get('cantidad_noches'))
+                precio_val = _iva_tur_num(stay.get('precio_unitario'))
+                cuit_hotel_val = str(stay.get('cuit_hotel') or '').replace('-', '').strip()
+
+                if detail_forbidden:
+                    fecha_dt = unidad_val = personas_val = noches_val = precio_val = None
+                    tipo_unidad_val = cuit_hotel_val = ''
+                elif detail_required:
+                    missing = []
+                    if not fecha_dt:
+                        missing.append('fecha_ingreso')
+                    if not unidad_val:
+                        missing.append('unidad')
+                    if not tipo_unidad_val:
+                        missing.append('tipo_unidad')
+                    if not noches_val:
+                        missing.append('cantidad_noches')
+                    if not precio_val:
+                        missing.append('precio_unitario')
+                    # Cantidad de personas: obligatoria salvo tipo unidad 0014 (plaza)
+                    if not personas_val and tipo_unidad_val.zfill(4) != '0014':
+                        missing.append('cantidad_personas')
+                    if missing:
+                        stay_errors.append(_(
+                            "%(ref)s: faltan datos de estadía obligatorios para ARCA: %(campos)s. "
+                            "Cárguelos en el campo 'Datos IVA Tur (JSON)' de la línea de factura.",
+                            ref=item_ref, campos=', '.join(missing)))
+                elif cod_tur_item == '0005':
+                    trio = (unidad_val, noches_val, precio_val)
+                    if any(trio) and not all(trio):
+                        stay_errors.append(_(
+                            "%(ref)s: para Código TUR 0005 (Excedente), 'unidad', "
+                            "'cantidad_noches' y 'precio_unitario' deben informarse "
+                            "los tres juntos o ninguno.", ref=item_ref))
+
+                cuit_hotel = cuit_hotel_val.ljust(11)[:11] if cuit_hotel_val else "".ljust(11)
+                fecha_ingreso_item = fecha_dt.strftime('%d%m%Y') if fecha_dt else "".ljust(8)
+                unidad_item = str(int(unidad_val)).zfill(4) if unidad_val else "".ljust(4)
+                tipo_unidad_item = tipo_unidad_val.zfill(4) if tipo_unidad_val else "".ljust(4)
+                cantidad_personas = str(int(personas_val)).zfill(2) if personas_val else "".ljust(2)
                 descripcion_item = item.descripcion.ljust(200)
-                cantidad_noches = "".ljust(5)
-                precio_unitario = "".ljust(18)
+                # Cantidad de noches: 3 enteros + 2 decimales. Precio: 12 enteros + 6 decimales.
+                cantidad_noches = str(int(round(noches_val * 100))).zfill(5) if noches_val else "".ljust(5)
+                precio_unitario = str(int(round(precio_val * 10**6))).zfill(18) if precio_val else "".ljust(18)
                 codigo_iva_item = "11" if item.codigoAlicuotaIVA == "5" else "10"
                 importe_iva_item = str(int(round(item.importeIVA * 100))).zfill(15)
                 importe_total_item = str(int(round(item.importeItem * 100))).zfill(15)
@@ -414,6 +509,11 @@ class AfipIvaTurReport(models.Model):
                     ))
                     output.write(line8 + '\r\n')
         
+        if stay_errors:
+            raise UserError(_(
+                "No se generó el archivo: ARCA rechazaría la presentación por datos "
+                "de estadía faltantes o inválidos.\n\n%s") % "\n".join(stay_errors))
+
         content = output.getvalue()
         
         def _get_export_filename_report(record):
